@@ -19,6 +19,32 @@ The capital city of North Sumatra is Medan.
 
 You can omit the quotes, but be careful with bash special characters like `&`, `|`, `;` that might be interpreted by your shell.
 
+### Interactive Mode
+
+You can start an interactive session using the `-i` or `--interactive` flag:
+
+```bash
+$ llm -i
+──────────────────
+User: What is the capital city of North Sumatra?
+
+Assistant:
+The capital city of North Sumatra is Medan.
+──────────────────
+User: Tell me more about Medan
+
+Assistant:
+[LLM will provide information about Medan]
+──────────────────
+User: exit
+```
+
+In interactive mode:
+- Each message is clearly separated with a divider
+- Your input is labeled as "User:" and responses are prefixed with "A:"
+- The conversation context is maintained throughout the session
+- Type `exit` or press Ctrl+C to end the session
+
 You can also pipe input from other commands or files:
 
 ```bash
@@ -162,6 +188,7 @@ $ llm --no-tools                  # Run without any tools
 $ llm --force-refresh             # Force refresh tool capabilities cache
 $ llm --text-only                 # Output raw text without markdown formatting
 $ llm --show-memories             # Show user memories
+$ llm -i, --interactive          # Start an interactive chat session
 ```
 
 ## Setup
