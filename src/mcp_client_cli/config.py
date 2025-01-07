@@ -38,12 +38,31 @@ class ServerConfig:
     exclude_tools: List[str] = None
     requires_confirmation: List[str] = None
 
+    @staticmethod
+    def _substitute_path_variables(value: str) -> str:
+        """Replace path variables with their actual values."""
+        if not value:
+            return value
+        
+        cwd = Path.cwd()
+        # Replace {pwd} with current working directory
+        if "{pwd}" in value:
+            value = value.replace("{pwd}", str(cwd))
+        # Replace {basename_pwd} with the name of the current directory
+        if "{basename_pwd}" in value:
+            value = value.replace("{basename_pwd}", cwd.name)
+        return value
+
     @classmethod
     def from_dict(cls, config: dict) -> "ServerConfig":
         """Create ServerConfig from dictionary."""
+        # Process command and args for path substitution
+        command = cls._substitute_path_variables(config["command"])
+        args = [cls._substitute_path_variables(arg) for arg in config.get("args", [])]
+        
         return cls(
-            command=config["command"],
-            args=config.get("args", []),
+            command=command,
+            args=args,
             env=config.get("env", {}),
             enabled=config.get("enabled", True),
             exclude_tools=config.get("exclude_tools", []),
@@ -91,4 +110,4 @@ class AppConfig:
             name: config 
             for name, config in self.mcp_servers.items() 
             if config.enabled
-        } 
+        }

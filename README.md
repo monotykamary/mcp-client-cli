@@ -190,6 +190,16 @@ $ llm --show-memories             # Show user memories
          "enabled": true,  // Optional, defaults to true
          "exclude_tools": []  // Optional, list of tool names to exclude
        },
+       "local-server": {
+         "command": "python",
+         "args": ["{pwd}/my_server.py"],  // {pwd} will be replaced with the current working directory
+         "requires_confirmation": ["local_tool"]
+       },
+       "project-server": {
+         "command": "node",
+         "args": ["server.js", "--name", "{basename_pwd}"],  // {basename_pwd} will be replaced with the current directory name
+         "requires_confirmation": ["project_tool"]
+       },
        "brave-search": {
          "command": "npx",
          "args": ["-y", "@modelcontextprotocol/server-brave-search"],
@@ -211,6 +221,8 @@ $ llm --show-memories             # Show user memories
    - The LLM API key can also be set via environment variables `LLM_API_KEY` or `OPENAI_API_KEY`
    - The config file can be placed in either `~/.llm/config.json` or `$PWD/.llm/config.json`
    - You can comment the JSON config file with `//` if you like to switch around the configuration
+   - Use `{pwd}` in command or args to reference the current working directory where the command is being executed (useful for local server paths)
+   - Use `{basename_pwd}` to reference just the name of the current directory (e.g., if pwd is "/path/to/project", basename_pwd will be "project")
 
 3. Run the CLI:
    ```bash
