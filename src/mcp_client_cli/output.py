@@ -5,9 +5,10 @@ from rich.markdown import Markdown
 from rich.prompt import Confirm
 
 class OutputHandler:
-    def __init__(self, text_only: bool = False):
+    def __init__(self, text_only: bool = False, interactive: bool = False):
         self.console = Console()
         self.text_only = text_only
+        self.interactive = interactive
         if self.text_only:
             self.md = ""
         else:
@@ -16,8 +17,9 @@ class OutputHandler:
 
     def start(self):
         if not self.text_only:
-            # Add Assistant prefix before starting live display with double newline for separation
-            self.console.print("[bold cyan]Assistant:[/bold cyan]")
+            # Only show Assistant prefix in interactive mode
+            if self.interactive:
+                self.console.print("[bold cyan]Assistant:[/bold cyan]")
             self._live = Live(
                 Markdown(self.md), 
                 vertical_overflow="visible", 
@@ -87,7 +89,10 @@ class OutputHandler:
         elif isinstance(chunk, tuple) and chunk[0] == "values":
             message: BaseMessage = chunk[1]['messages'][-1]
             if isinstance(message, AIMessage) and message.tool_calls:
-                md += "\n\n### Tool Calls:"
+                # Ensure there's a newline before Tool Calls if not already present
+                if not md.endswith('\n'):
+                    md += '\n\n'
+                md += "**Tool Calls:**"
                 for tc in message.tool_calls:
                     lines = [
                         f"  {tc.get('name', 'Tool')}",
@@ -97,7 +102,6 @@ class OutputHandler:
                         lines.append(f"Error: {tc.get('error')}")
                         lines.append("```")
 
-                    lines.append("Args:")
                     lines.append("```")
                     args = tc.get("args")
                     if isinstance(args, str):

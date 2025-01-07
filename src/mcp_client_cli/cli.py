@@ -96,6 +96,9 @@ async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfi
     try:
         while True:
             try:
+                # Add separator line after first message
+                console.print("[green]" + "─" * console.width + "[/green]")
+                
                 # Get user input with proper formatting
                 console.print("[bold green]User:[/bold green] ", end="")
                 user_input = input().strip()
@@ -106,6 +109,9 @@ async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfi
                     
                 # Create message
                 query = HumanMessage(content=user_input)
+
+                # Create a new line after user input
+                console.print()
                 
                 # Handle the conversation with existing tools
                 await handle_conversation(args, query, True, app_config, toolkits=toolkits, existing_tools=tools)
@@ -297,7 +303,7 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
             memories=formatted_memories,
         )
 
-        output = OutputHandler(text_only=args.text_only)
+        output = OutputHandler(text_only=args.text_only, interactive=args.interactive)
         output.start()
         try:
             async for chunk in agent_executor.astream(
