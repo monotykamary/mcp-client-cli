@@ -6,7 +6,7 @@ import os
 import commentjson
 from typing import Dict, List, Optional
 
-from .const import CONFIG_FILE, CONFIG_DIR
+from .const import CONFIG_FILE, CONFIG_DIR, LLMRULES_FILE, LOCAL_LLMRULES_FILE
 
 @dataclass
 class LLMConfig:
@@ -80,6 +80,7 @@ class AppConfig:
     @classmethod
     def load(cls) -> "AppConfig":
         """Load configuration from file."""
+        # Load main config
         config_paths = [CONFIG_FILE, CONFIG_DIR / "config.json"]
         chosen_path = next((path for path in config_paths if os.path.exists(path)), None)
         
@@ -89,6 +90,17 @@ class AppConfig:
         with open(chosen_path, 'r') as f:
             config = commentjson.load(f)
 
+        # Load system prompt from .llmrules files, defaulting to empty string
+        system_prompt = ""
+        # Check local .llmrules first
+        if os.path.exists(LOCAL_LLMRULES_FILE):
+            with open(LOCAL_LLMRULES_FILE, 'r') as f:
+                system_prompt = f.read().strip()
+        # Fall back to global .llmrules if local doesn't exist
+        elif os.path.exists(LLMRULES_FILE):
+            with open(LLMRULES_FILE, 'r') as f:
+                system_prompt = f.read().strip()
+
         # Extract tools requiring confirmation
         tools_requires_confirmation = []
         for server_config in config["mcpServers"].values():
@@ -96,7 +108,7 @@ class AppConfig:
 
         return cls(
             llm=LLMConfig.from_dict(config.get("llm", {})),
-            system_prompt=config["systemPrompt"],
+            system_prompt=system_prompt,
             mcp_servers={
                 name: ServerConfig.from_dict(server_config)
                 for name, server_config in config["mcpServers"].items()

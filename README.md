@@ -201,10 +201,19 @@ $ llm -i, --interactive           # Start an interactive chat session
    pipx install git+https://github.com/monotykamary/mcp-client-cli.git
    ```
 
-2. Create a `~/.llm/config.json` file to configure your LLM and MCP servers:
+2. Create the following configuration files:
+
+   `.llmrules` (optional, in your project directory) or `~/.llm/.llmrules` (optional, global):
+   ```text
+   You are an AI assistant helping a software engineer...
+   ```
+   Note: 
+   - The local .llmrules file in your project directory takes precedence over the global one in ~/.llm/
+   - If no .llmrules file is found, the system will start with an empty system prompt
+
+   `~/.llm/config.json`:
    ```json
    {
-     "systemPrompt": "You are an AI assistant helping a software engineer...",
      "llm": {
        "provider": "openai",
        "model": "gpt-4",
