@@ -50,7 +50,6 @@ class AgentState(TypedDict):
 async def run() -> None:
     """Run the LLM agent."""
     args = setup_argument_parser()
-    query, is_conversation_continuation = parse_query(args)
     app_config = AppConfig.load()
     
     if args.list_tools:
@@ -64,8 +63,43 @@ async def run() -> None:
     if args.list_prompts:
         handle_list_prompts()
         return
+
+    if args.interactive:
+        await handle_interactive_chat(args, app_config)
+        return
         
+    query, is_conversation_continuation = parse_query(args)
     await handle_conversation(args, query, is_conversation_continuation, app_config)
+
+async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfig) -> None:
+    """Handle interactive chat mode."""
+    console = Console()
+    console.print("[bold cyan]Interactive Chat Mode[/bold cyan] (Type 'exit' to quit)")
+    
+    conversation_manager = ConversationManager(SQLITE_DB)
+    thread_id = uuid.uuid4().hex
+    
+    while True:
+        try:
+            # Get user input
+            console.print("\n[bold green]You:[/bold green] ", end="")
+            user_input = input().strip()
+            
+            if user_input.lower() == 'exit':
+                console.print("[bold cyan]Exiting chat...[/bold cyan]")
+                break
+                
+            # Create message
+            query = HumanMessage(content=user_input)
+            
+            # Handle the conversation
+            await handle_conversation(args, query, True, app_config)
+            
+        except KeyboardInterrupt:
+            console.print("\n[bold cyan]Exiting chat...[/bold cyan]")
+            break
+        except Exception as e:
+            console.print(f"[bold red]Error:[/bold red] {str(e)}")
 
 def setup_argument_parser() -> argparse.Namespace:
     """Setup and return the argument parser."""
@@ -77,6 +111,7 @@ Examples:
   llm "What is the capital of France?"     Ask a simple question
   llm c "tell me more"                     Continue previous conversation
   llm p review                             Use a prompt template
+  llm -i                                   Start interactive chat mode
   cat file.txt | llm                       Process input from a file
   llm --list-tools                         Show available tools
   llm --list-prompts                       Show available prompt templates
@@ -102,6 +137,8 @@ Examples:
                        help='Do not add any tools')
     parser.add_argument('--show-memories', action='store_true',
                        help='Show user memories')
+    parser.add_argument('-i', '--interactive', action='store_true',
+                       help='Start interactive chat mode')
     return parser.parse_args()
 
 async def handle_list_tools(app_config: AppConfig, args: argparse.Namespace) -> None:
