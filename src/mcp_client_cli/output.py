@@ -16,11 +16,13 @@ class OutputHandler:
 
     def start(self):
         if not self.text_only:
+            # Add Assistant prefix before starting live display with double newline for separation
+            self.console.print("[bold cyan]Assistant:[/bold cyan]")
             self._live = Live(
                 Markdown(self.md), 
                 vertical_overflow="visible", 
-                screen=True,
-                console=self.console
+                console=self.console,
+                refresh_per_second=4
             )
             self._live.start()
 
@@ -63,9 +65,6 @@ class OutputHandler:
 
     def finish(self):
         self.stop()
-        if not self.text_only:
-            self.console.clear()
-            self.console.print(Markdown(self.md))
 
     def _parse_chunk(self, chunk: any, md: str = "") -> str:
         """
@@ -160,11 +159,10 @@ class OutputHandler:
         """
         Ask the user for confirmation to run a tool call.
         """
-        self.console.set_alt_screen(True)
+        self.console.print("\n")
         self.console.print(Markdown(self.md))
-        self.console.print(f"\n\n")
+        self.console.print("\n")
         is_tool_call_confirmed = Confirm.ask(f"Confirm tool call?", console=self.console)
-        self.console.set_alt_screen(False)
         if not is_tool_call_confirmed:
             return False
         return True

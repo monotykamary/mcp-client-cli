@@ -74,32 +74,51 @@ async def run() -> None:
 async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfig) -> None:
     """Handle interactive chat mode."""
     console = Console()
-    console.print("[bold cyan]Interactive Chat Mode[/bold cyan] (Type 'exit' to quit)")
     
     conversation_manager = ConversationManager(SQLITE_DB)
     thread_id = uuid.uuid4().hex
     
-    while True:
-        try:
-            # Get user input
-            console.print("\n[bold green]You:[/bold green] ", end="")
-            user_input = input().strip()
-            
-            if user_input.lower() == 'exit':
-                console.print("[bold cyan]Exiting chat...[/bold cyan]")
-                break
+    # Initialize tools once for the entire session
+    server_configs = [
+        McpServerConfig(
+            server_name=name,
+            server_param=StdioServerParameters(
+                command=config.command,
+                args=config.args or [],
+                env={**(config.env or {}), **os.environ}
+            ),
+            exclude_tools=config.exclude_tools or []
+        )
+        for name, config in app_config.get_enabled_servers().items()
+    ]
+    toolkits, tools = await load_tools(server_configs, args.no_tools, args.force_refresh)
+    
+    try:
+        while True:
+            try:
+                # Get user input with proper formatting
+                console.print("[bold green]User:[/bold green] ", end="")
+                user_input = input().strip()
                 
-            # Create message
-            query = HumanMessage(content=user_input)
-            
-            # Handle the conversation
-            await handle_conversation(args, query, True, app_config)
-            
-        except KeyboardInterrupt:
-            console.print("\n[bold cyan]Exiting chat...[/bold cyan]")
-            break
-        except Exception as e:
-            console.print(f"[bold red]Error:[/bold red] {str(e)}")
+                if user_input.lower() == 'exit':
+                    console.print("\n[bold cyan]Exiting chat...[/bold cyan]")
+                    break
+                    
+                # Create message
+                query = HumanMessage(content=user_input)
+                
+                # Handle the conversation with existing tools
+                await handle_conversation(args, query, True, app_config, toolkits=toolkits, existing_tools=tools)
+                
+            except KeyboardInterrupt:
+                console.print("\n[bold cyan]Exiting chat...[/bold cyan]")
+                break
+            except Exception as e:
+                console.print(f"[bold red]Error:[/bold red] {str(e)}")
+    finally:
+        # Clean up tools when chat ends
+        for toolkit in toolkits:
+            await toolkit.close()
 
 def setup_argument_parser() -> argparse.Namespace:
     """Setup and return the argument parser."""
@@ -216,25 +235,30 @@ async def load_tools(server_configs: list[McpServerConfig], no_tools: bool, forc
     return toolkits, langchain_tools
 
 async def handle_conversation(args: argparse.Namespace, query: HumanMessage, 
-                            is_conversation_continuation: bool, app_config: AppConfig) -> None:
+                            is_conversation_continuation: bool, app_config: AppConfig,
+                            toolkits: list = None, existing_tools: list = None) -> None:
     """Handle the main conversation flow."""
-    server_configs = [
-        McpServerConfig(
-            server_name=name,
-            server_param=StdioServerParameters(
-                command=config.command,
-                args=config.args or [],
-                env={**(config.env or {}), **os.environ}
-            ),
-            exclude_tools=config.exclude_tools or []
-        )
-        for name, config in app_config.get_enabled_servers().items()
-    ]
-    toolkits, tools = await load_tools(server_configs, args.no_tools, args.force_refresh)
+    # Use existing tools if provided, otherwise load new ones
+    if existing_tools is None:
+        server_configs = [
+            McpServerConfig(
+                server_name=name,
+                server_param=StdioServerParameters(
+                    command=config.command,
+                    args=config.args or [],
+                    env={**(config.env or {}), **os.environ}
+                ),
+                exclude_tools=config.exclude_tools or []
+            )
+            for name, config in app_config.get_enabled_servers().items()
+        ]
+        toolkits, tools = await load_tools(server_configs, args.no_tools, args.force_refresh)
+    else:
+        tools = existing_tools
     
-    extra_body = {}
+    model_kwargs = {}
     if app_config.llm.base_url and "openrouter" in app_config.llm.base_url:
-        extra_body = {"transforms": ["middle-out"]}
+        model_kwargs["transforms"] = ["middle-out"]
     model: BaseChatModel = init_chat_model(
         model=app_config.llm.model,
         model_provider=app_config.llm.provider,
@@ -245,7 +269,7 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
             "X-Title": "mcp-client-cli",
             "HTTP-Referer": "https://github.com/adhikasp/mcp-client-cli",
         },
-        extra_body=extra_body
+        model_kwargs=model_kwargs
     )
 
     prompt = ChatPromptTemplate.from_messages([
