@@ -54,6 +54,13 @@ async def get_memories(store: BaseStore, user_id: str = "myself", query: str = N
     memories = [m.value["data"] for m in await store.asearch(namespace, query=query)]
     return memories
 
+async def clear_memories(store: BaseStore, user_id: str = "myself") -> None:
+    """Clear all memories for the given user."""
+    namespace = ("memories", user_id)
+    items = await store.asearch(namespace)
+    for item in items:
+        await store.abatch([PutOp(namespace=namespace, key=item.key, value=None)])
+
 class SqliteStore(BaseStore):
     """SQLite-based store with optional vector search.
 
@@ -623,4 +630,4 @@ class SqliteStore(BaseStore):
                     dot_product / (norm1 * norm2) if norm1 > 0 and norm2 > 0 else 0.0
                 )
                 similarities.append(similarity)
-            return similarities 
+            return similarities

@@ -59,6 +59,10 @@ async def run() -> None:
     if args.show_memories:
         await handle_show_memories()
         return
+    
+    if args.clear_memories:
+        await handle_clear_memories()
+        return
         
     if args.list_prompts:
         handle_list_prompts()
@@ -162,6 +166,8 @@ Examples:
                        help='Do not add any tools')
     parser.add_argument('--show-memories', action='store_true',
                        help='Show user memories')
+    parser.add_argument('--clear-memories', action='store_true',
+                       help='Clear all user memories')
     parser.add_argument('-i', '--interactive', action='store_true',
                        help='Start interactive chat mode')
     return parser.parse_args()
@@ -206,6 +212,13 @@ async def handle_show_memories() -> None:
     for memory in memories:
         table.add_row(memory)
     console.print(table)
+
+async def handle_clear_memories() -> None:
+    """Handle the --clear-memories command."""
+    store = SqliteStore(SQLITE_DB)
+    await clear_memories(store)
+    console = Console()
+    console.print("[green]All memories have been cleared.[/green]")
 
 def handle_list_prompts() -> None:
     """Handle the --list-prompts command."""

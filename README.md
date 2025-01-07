@@ -185,9 +185,10 @@ The CLI automatically detects if the clipboard content is text or image and hand
 $ llm --list-tools                # List all available tools
 $ llm --list-prompts              # List available prompt templates
 $ llm --no-tools                  # Run without any tools
-$ llm --force-refresh             # Force refresh tool capabilities cache
+$ llm --force-refresh             # Force refresh tool capabilities
 $ llm --text-only                 # Output raw text without markdown formatting
 $ llm --show-memories             # Show user memories
+$ llm --clear-memories            # Clear all user memories
 $ llm -i, --interactive          # Start an interactive chat session
 ```
 
