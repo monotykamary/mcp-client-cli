@@ -4,12 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp_client_cli"
-version = "0.3.0"
+version = "0.4.0"
 description = "Command line interface for MCP client"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
-    { name = "Adhika Setya Pramudita", email = "adhika.setya.p@gmail.com" }
+    { name = "Adhika Setya Pramudita", email = "adhika.setya.p@gmail.com" },
+    { name = "Tom Nguyen", email = "tom81094@gmail.com" }
 ]
 license = { text = "MIT" }
 dependencies = [
@@ -39,8 +40,8 @@ clipboard = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/adhikasp/mcp_client_cli"
-Issues = "https://github.com/adhikasp/mcp_client_cli/issues"
+Homepage = "https://github.com/monotykamary/mcp_client_cli"
+Issues = "https://github.com/monotykamary/mcp_client_cli/issues"
 
 [project.scripts]
 llm = "mcp_client_cli.cli:main"

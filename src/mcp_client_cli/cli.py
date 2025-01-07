@@ -286,7 +286,7 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
         base_url=app_config.llm.base_url,
         default_headers={
             "X-Title": "mcp-client-cli",
-            "HTTP-Referer": "https://github.com/adhikasp/mcp-client-cli",
+            "HTTP-Referer": "https://github.com/monotykamary/mcp-client-cli",
         },
         model_kwargs=model_kwargs
     )

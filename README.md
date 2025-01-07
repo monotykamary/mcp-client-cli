@@ -1,10 +1,10 @@
 # MCP CLI client
 
-A simple CLI program to run LLM prompt and implement [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) client.
+A fork of [adhikasp/mcp-client-cli](https://github.com/adhikasp/mcp-client-cli) that adds interactive mode, dynamic command configuration, and more features.
 
-You can use any [MCP-compatible servers](https://github.com/punkpeye/awesome-mcp-servers) from the convenience of your terminal.
+This is a CLI program that implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) client, allowing you to run LLM prompts from your terminal.
 
-This act as alternative client beside Claude Desktop. Additionally you can use any LLM provider like OpenAI, Groq, or local LLM model via [llama](https://github.com/ggerganov/llama.cpp).
+You can use any [MCP-compatible servers](https://github.com/punkpeye/awesome-mcp-servers) through this client. It serves as an alternative to Claude Desktop, and supports various LLM providers including OpenAI, Groq, or local LLM models via [llama](https://github.com/ggerganov/llama.cpp).
 
 ![C4 Diagram](c4_diagram.png)
 
@@ -189,14 +189,16 @@ $ llm --force-refresh             # Force refresh tool capabilities
 $ llm --text-only                 # Output raw text without markdown formatting
 $ llm --show-memories             # Show user memories
 $ llm --clear-memories            # Clear all user memories
-$ llm -i, --interactive          # Start an interactive chat session
+$ llm -i, --interactive           # Start an interactive chat session
 ```
 
 ## Setup
 
 1. Clone the repository:
    ```bash
-   pip install git+https://github.com/adhikasp/mcp-client-cli.git
+   pip install git+https://github.com/monotykamary/mcp-client-cli.git
+   # OR
+   pipx install git+https://github.com/monotykamary/mcp-client-cli.git
    ```
 
 2. Create a `~/.llm/config.json` file to configure your LLM and MCP servers:
