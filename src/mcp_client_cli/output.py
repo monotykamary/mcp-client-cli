@@ -20,9 +20,11 @@ class OutputHandler:
             # Only show Assistant prefix in interactive mode
             if self.interactive:
                 self.console.print("[bold cyan]Assistant:[/bold cyan]")
+            # Get console height for proper content management
+            self.console_height = self.console.height or 24  # Default to 24 if height not available
             self._live = Live(
                 Markdown(self.md),
-                vertical_overflow="visible",
+                vertical_overflow="crop",
                 console=self.console,
                 refresh_per_second=120,
                 auto_refresh=False  # We'll manually refresh to ensure immediate updates
@@ -36,7 +38,9 @@ class OutputHandler:
         else:
             if self.md.startswith("Thinking...") and not self.md.strip("Thinking...").isspace():
                 self.md = self.md.strip("Thinking...").strip()
-            self._live.update(Markdown(self.md), refresh=True)  # Force immediate refresh
+            # Truncate content to fit console height while preserving context
+            truncated_md = self._truncate_md_to_fit(self.md, self.console.size)
+            self._live.update(Markdown(truncated_md), refresh=True)  # Force immediate refresh
 
     def update_error(self, error: Exception):
         import traceback
@@ -44,7 +48,8 @@ class OutputHandler:
         if self.text_only:
             self.console.print(self.md)
         else:
-            self._live.update(Markdown(self.md), refresh=True)
+            truncated_md = self._truncate_md_to_fit(self.md, self.console.size)
+            self._live.update(Markdown(truncated_md), refresh=True)
 
     def stop(self):
         if not self.text_only and self._live:
@@ -133,8 +138,23 @@ class OutputHandler:
     def _truncate_md_to_fit(self, md: str, dimensions: ConsoleDimensions) -> str:
         """
         Process markdown content for display.
+        Ensures content fits within console height while preserving context.
         """
-        return md
+        lines = md.split('\n')
+        if len(lines) <= self.console_height:
+            return md
+            
+        # Keep the first few lines for context
+        context_lines = 2
+        # Calculate remaining lines we can show
+        remaining_lines = self.console_height - context_lines - 1  # -1 for ellipsis
+        
+        # Combine first few lines and last chunk of content
+        return '\n'.join(
+            lines[:context_lines] +
+            ['...'] +
+            lines[-remaining_lines:]
+        )
 
     def _is_tool_call_requested(self, chunk: any, config: dict) -> bool:
         """
