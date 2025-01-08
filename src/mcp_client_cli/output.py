@@ -14,33 +14,37 @@ class OutputHandler:
         else:
             self.md = "Thinking...\n"
         self._live = None
+        self.full_content = ""  # Store complete content for later display
 
     def start(self):
         if not self.text_only:
             # Only show Assistant prefix in interactive mode
             if self.interactive:
                 self.console.print("[bold cyan]Assistant:[/bold cyan]")
-            # Get console height for proper content management
-            self.console_height = self.console.height or 24  # Default to 24 if height not available
             self._live = Live(
                 Markdown(self.md),
-                vertical_overflow="visible",
+                vertical_overflow="visible",  # Allow scrolling during streaming
                 console=self.console,
                 refresh_per_second=30,
-                auto_refresh=False  # We'll manually refresh to ensure immediate updates
+                auto_refresh=False,  # We'll manually refresh to ensure immediate updates
             )
             self._live.start()
 
     def update(self, chunk: any):
-        self.md = self._parse_chunk(chunk, self.md)
+        new_content = self._parse_chunk(chunk, self.md)
+        # Update full content for later display
+        if not self.text_only:
+            self.full_content = new_content
+        
         if self.text_only:
             self.console.print(self._parse_chunk(chunk), end="")
         else:
-            if self.md.startswith("Thinking...") and not self.md.strip("Thinking...").isspace():
-                self.md = self.md.strip("Thinking...").strip()
-            # Truncate content to fit console height while preserving context
-            truncated_md = self._truncate_md_to_fit(self.md, self.console.size)
-            self._live.update(Markdown(truncated_md), refresh=True)  # Force immediate refresh
+            if new_content.startswith("Thinking...") and not new_content.strip("Thinking...").isspace():
+                new_content = new_content.strip("Thinking...").strip()
+            # Update display content while streaming
+            self.md = new_content
+            # Show all content during streaming with visible overflow
+            self._live.update(Markdown(self.md), refresh=True)
 
     def update_error(self, error: Exception):
         import traceback
@@ -48,8 +52,7 @@ class OutputHandler:
         if self.text_only:
             self.console.print(self.md)
         else:
-            truncated_md = self._truncate_md_to_fit(self.md, self.console.size)
-            self._live.update(Markdown(truncated_md), refresh=True)
+            self._live.update(Markdown(self.md), refresh=True)
 
     def stop(self):
         if not self.text_only and self._live:
@@ -134,27 +137,6 @@ class OutputHandler:
                 md += "\n```\n"
             md += "\n"
         return md
-
-    def _truncate_md_to_fit(self, md: str, dimensions: ConsoleDimensions) -> str:
-        """
-        Process markdown content for display.
-        Ensures content fits within console height while preserving context.
-        """
-        lines = md.split('\n')
-        if len(lines) <= self.console_height:
-            return md
-            
-        # Keep the first few lines for context
-        context_lines = 2
-        # Calculate remaining lines we can show
-        remaining_lines = self.console_height - context_lines - 1  # -1 for ellipsis
-        
-        # Combine first few lines and last chunk of content
-        return '\n'.join(
-            lines[:context_lines] +
-            ['...'] +
-            lines[-remaining_lines:]
-        )
 
     def _is_tool_call_requested(self, chunk: any, config: dict) -> bool:
         """
