@@ -1,5 +1,5 @@
 from typing import List, Type, Optional, Any, override
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from langchain_core.tools import BaseTool, BaseToolkit, ToolException
 from mcp import StdioServerParameters, types, ClientSession
 from mcp.client.stdio import stdio_client
@@ -7,8 +7,30 @@ import pydantic
 from pydantic_core import to_json
 from jsonschema_pydantic import jsonschema_to_pydantic
 import asyncio
+import hashlib
+import json
 
 from .storage import *
+
+def generate_server_id(server_param: StdioServerParameters) -> str:
+    """Generate a unique, consistent identifier for an MCP server.
+    
+    Args:
+        server_param (StdioServerParameters): The server parameters to generate an ID for.
+        
+    Returns:
+        str: A unique hash identifier for the server.
+    """
+    # Create a dictionary of all relevant server parameters
+    server_dict = {
+        "command": server_param.command,
+        "args": server_param.args,
+        "env": server_param.env or {}
+    }
+    
+    # Convert to a consistent string representation and hash it
+    server_str = json.dumps(server_dict, sort_keys=True)
+    return hashlib.sha256(server_str.encode()).hexdigest()[:16]
 
 class McpServerConfig(BaseModel):
     """Configuration for an MCP server.
@@ -21,11 +43,18 @@ class McpServerConfig(BaseModel):
         server_param (StdioServerParameters): Connection parameters for the server, including
             command, arguments and environment variables
         exclude_tools (list[str]): List of tool names to exclude from this server
+        unique_id (str): A unique identifier generated from server parameters
     """
     
     server_name: str
     server_param: StdioServerParameters
     exclude_tools: list[str] = []
+    unique_id: str = Field(default="")
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        if not self.unique_id:
+            self.unique_id = generate_server_id(self.server_param)
 
 class McpToolkit(BaseToolkit):
     name: str

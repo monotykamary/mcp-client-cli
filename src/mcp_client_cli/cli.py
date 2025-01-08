@@ -106,7 +106,8 @@ async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfi
                 console.print("[green]" + "─" * console.width + "[/green]")
                 
                 # Get user input with proper formatting
-                console.print("[bold green]User:[/bold green] ", end="")
+                console.print("[bold green]User:[/bold green]")  # Print on its own line
+                console.print("", end="")  # Print space for input on next line
                 user_input = await get_user_input()
                 
                 if user_input.lower() == '/exit':

@@ -17,8 +17,10 @@ def get_cached_tools(server_param: StdioServerParameters) -> Optional[List[types
     Returns:
         Optional[List[types.Tool]]: A list of tools if cache is available and not expired, otherwise None.
     """
+    from .tool import generate_server_id  # Import here to avoid circular dependency
+    
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_key = f"{server_param.command}-{'-'.join(server_param.args)}".replace("/", "-")
+    cache_key = generate_server_id(server_param)
     cache_file = CACHE_DIR / f"{cache_key}.json"
     
     if not cache_file.exists():
@@ -40,7 +42,9 @@ def save_tools_cache(server_param: StdioServerParameters, tools: List[types.Tool
         server_param (StdioServerParameters): The server parameters to identify the cache.
         tools (List[types.Tool]): The list of tools to be cached.
     """
-    cache_key = f"{server_param.command}-{'-'.join(server_param.args)}".replace("/", "-")
+    from .tool import generate_server_id  # Import here to avoid circular dependency
+    
+    cache_key = generate_server_id(server_param)
     cache_file = CACHE_DIR / f"{cache_key}.json"
     
     cache_data = {

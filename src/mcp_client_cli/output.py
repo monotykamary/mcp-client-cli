@@ -77,25 +77,35 @@ class OutputHandler:
             if isinstance(message_chunk, AIMessageChunk):
                 content = message_chunk.content
                 if isinstance(content, str):
+                    # Escape any existing Rich markup in the content
+                    content = content.replace("[", "\\[").replace("]", "\\]")
                     md += content
                 elif isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict) and "text" in content[0]:
-                    md += content[0]["text"]
+                    # Escape any existing Rich markup in the text content
+                    text = content[0]["text"].replace("[", "\\[").replace("]", "\\]")
+                    md += text
         # If this is a final value
         elif isinstance(chunk, dict) and "messages" in chunk:
             last_message = chunk["messages"][-1]
             if isinstance(last_message, AIMessage):
                 content = last_message.content
                 if isinstance(content, str):
+                    # Escape any existing Rich markup in the content
+                    content = content.replace("[", "\\[").replace("]", "\\]")
                     md += content
                 elif isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict) and "text" in content[0]:
-                    md += content[0]["text"]
+                    # Escape any existing Rich markup in the text content
+                    text = content[0]["text"].replace("[", "\\[").replace("]", "\\]")
+                    md += text
             md += "\n"
         elif isinstance(chunk, tuple) and chunk[0] == "values":
             message: BaseMessage = chunk[1]['messages'][-1]
             if isinstance(message, AIMessage) and message.tool_calls:
                 for tc in message.tool_calls:
-                    md += f"\n\n{tc.get('name', 'Tool')}: "
-                    md += str(tc.get("args", {}))
+                    # Escape any Rich markup in tool call output
+                    tool_name = str(tc.get('name', 'Tool')).replace("[", "\\[").replace("]", "\\]")
+                    args = str(tc.get("args", {})).replace("[", "\\[").replace("]", "\\]")
+                    md += f"\n\n{tool_name}: {args}"
         return md
 
     def _is_tool_call_requested(self, chunk: any, config: dict) -> bool:
