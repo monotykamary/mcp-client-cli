@@ -118,8 +118,8 @@ async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfi
                 # Create a new line after user input
                 console.print()
                 
-                # Handle the conversation with existing tools
-                await handle_conversation(args, query, True, app_config, toolkits=toolkits, existing_tools=tools)
+                # Handle the conversation with existing tools, using the interactive session's thread_id
+                await handle_conversation(args, query, False, app_config, toolkits=toolkits, existing_tools=tools, thread_id=thread_id)
                 
             except KeyboardInterrupt:
                 console.print("\n[bold cyan]Exiting chat...[/bold cyan]")
@@ -256,7 +256,8 @@ async def load_tools(server_configs: list[McpServerConfig], no_tools: bool, forc
 
 async def handle_conversation(args: argparse.Namespace, query: HumanMessage, 
                             is_conversation_continuation: bool, app_config: AppConfig,
-                            toolkits: list = None, existing_tools: list = None) -> None:
+                            toolkits: list = None, existing_tools: list = None,
+                            thread_id: str = None) -> None:
     """Handle the main conversation flow."""
     # Use existing tools if provided, otherwise load new ones
     if existing_tools is None:
@@ -326,8 +327,10 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
             state_modifier=prompt, checkpointer=checkpointer, store=store
         )
         
-        thread_id = (await conversation_manager.get_last_id() if is_conversation_continuation 
-                    else uuid.uuid4().hex)
+        # Use provided thread_id for interactive mode, otherwise handle continuation logic
+        if thread_id is None:
+            thread_id = (await conversation_manager.get_last_id() if is_conversation_continuation 
+                        else uuid.uuid4().hex)
 
         # Process messages for caching if using Anthropic
         if app_config.llm.provider == "anthropic":

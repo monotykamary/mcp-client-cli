@@ -144,6 +144,7 @@ class ConversationManager:
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY,
                 thread_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -194,6 +195,7 @@ class ConversationManager:
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY,
                 thread_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -212,7 +214,7 @@ class ConversationManager:
             
         # Save message
         await db.execute(
-            "INSERT INTO messages (thread_id, role, content) VALUES (?, ?, ?)",
-            (thread_id, role, str(message.content))
+            "INSERT INTO messages (thread_id, session_id, role, content) VALUES (?, ?, ?, ?)",
+            (thread_id, thread_id, role, str(message.content))
         )
         await db.commit()
