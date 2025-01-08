@@ -201,8 +201,10 @@ async def handle_list_tools(app_config: AppConfig, args: argparse.Namespace) -> 
 
     console.print(table)
 
-    for toolkit in toolkits:
-        await toolkit.close()
+    # Only close toolkits if they were created in this function (not passed in)
+    if existing_tools is None and toolkits:
+        for toolkit in toolkits:
+            await toolkit.close()
 
 async def handle_show_memories() -> None:
     """Handle the --show-memories command."""
@@ -413,8 +415,10 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
 
         await conversation_manager.save_id(thread_id, checkpointer.conn)
 
-    for toolkit in toolkits:
-        await toolkit.close()
+    # Only close toolkits if they were created in this function (not passed in)
+    if existing_tools is None and toolkits:
+        for toolkit in toolkits:
+            await toolkit.close()
 
 def parse_query(args: argparse.Namespace) -> tuple[HumanMessage, bool]:
     """

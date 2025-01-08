@@ -82,7 +82,14 @@ class OutputHandler:
                     md += content[0]["text"]
         # If this is a final value
         elif isinstance(chunk, dict) and "messages" in chunk:
-            # Print a newline after the complete message
+            # Get the last message content and stream it
+            last_message = chunk["messages"][-1]
+            if isinstance(last_message, AIMessage):
+                content = last_message.content
+                if isinstance(content, str):
+                    md += content
+                elif isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict) and "text" in content[0]:
+                    md += content[0]["text"]
             md += "\n"
         elif isinstance(chunk, tuple) and chunk[0] == "values":
             message: BaseMessage = chunk[1]['messages'][-1]
