@@ -22,9 +22,9 @@ class OutputHandler:
                 self.console.print("[bold cyan]Assistant:[/bold cyan]")
             self._live = Live(
                 Markdown(self.md), 
-                vertical_overflow="visible", 
+                vertical_overflow="crop",
                 console=self.console,
-                refresh_per_second=4
+                refresh_per_second=60
             )
             self._live.start()
 
@@ -35,8 +35,7 @@ class OutputHandler:
         else:
             if self.md.startswith("Thinking...") and not self.md.strip("Thinking...").isspace():
                 self.md = self.md.strip("Thinking...").strip()
-            partial_md = self._truncate_md_to_fit(self.md, self.console.size)
-            self._live.update(Markdown(partial_md), refresh=True)
+            self._live.update(Markdown(self.md))
 
     def update_error(self, error: Exception):
         import traceback
@@ -44,8 +43,7 @@ class OutputHandler:
         if self.text_only:
             self.console.print(self.md)
         else:
-            partial_md = self._truncate_md_to_fit(self.md, self.console.size)
-            self._live.update(Markdown(partial_md), refresh=True)
+            self._live.update(Markdown(self.md), refresh=True)
 
     def stop(self):
         if not self.text_only and self._live:
@@ -97,54 +95,33 @@ class OutputHandler:
                     lines = [
                         f"  {tc.get('name', 'Tool')}",
                     ]
-                    if tc.get("error"):
-                        lines.append(f"```")
-                        lines.append(f"Error: {tc.get('error')}")
-                        lines.append("```")
 
-                    lines.append("```")
                     args = tc.get("args")
-                    if isinstance(args, str):
-                        lines.append(f"{args}")
-                    elif isinstance(args, dict):
-                        for arg, value in args.items():
-                            lines.append(f"{arg}: {value}")
-                    lines.append("```\n")
+                    if args:  # Only add code block if there are arguments
+                        lines.append("```")
+                        if isinstance(args, str):
+                            lines.append(f"{args}")
+                        elif isinstance(args, dict):
+                            for arg, value in args.items():
+                                lines.append(f"{arg}: {value}")
+                        lines.append("```")
+                    lines.append("")  # Add empty line for spacing
                     md += "\n".join(lines)
             elif isinstance(message, ToolMessage) and message.status != "success":
-                md += "Failed call with error:"
-                md += f"\n\n{message.content}"
+                if not md.endswith('\n'):
+                    md += '\n'
+                md += "Failed call with error:\n"
+                md += "```\n"
+                md += f"{message.content}\n"
+                md += "```\n"
             md += "\n"
         return md
 
     def _truncate_md_to_fit(self, md: str, dimensions: ConsoleDimensions) -> str:
         """
-        Truncate the markdown to fit the console size, with few line safety margin.
+        Process markdown content for display.
         """
-        lines = md.splitlines()
-        max_lines = dimensions.height - 3  # Safety margin
-        fitted_lines = []
-        current_height = 0
-        code_block_count = 0
-
-        for line in reversed(lines):
-            # Calculate wrapped line height, rounding up for safety
-            line_height = 1 + len(line) // dimensions.width
-
-            if current_height + line_height > max_lines:
-                # If we're breaking in the middle of code blocks, add closing ```
-                if code_block_count % 2 == 1:
-                    fitted_lines.insert(0, "```")
-                break
-
-            fitted_lines.insert(0, line)
-            current_height += line_height
-
-            # Track code block markers
-            if line.strip() == "```":
-                code_block_count += 1
-
-        return '\n'.join(fitted_lines) if fitted_lines else ''
+        return md
 
     def _is_tool_call_requested(self, chunk: any, config: dict) -> bool:
         """
