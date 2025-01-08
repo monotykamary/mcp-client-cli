@@ -1,6 +1,5 @@
 from langchain_core.messages import BaseMessage, AIMessage, AIMessageChunk, ToolMessage
-from rich.console import Console, ConsoleDimensions
-from rich.live import Live
+from rich.console import Console
 from rich.markdown import Markdown
 from rich.prompt import Confirm
 
@@ -9,67 +8,59 @@ class OutputHandler:
         self.console = Console()
         self.text_only = text_only
         self.interactive = interactive
-        if self.text_only:
-            self.md = ""
-        else:
-            self.md = "Thinking...\n"
-        self._live = None
-        self.full_content = ""  # Store complete content for later display
+        self.md = ""
 
     def start(self):
-        if not self.text_only:
-            # Only show Assistant prefix in interactive mode
-            if self.interactive:
-                self.console.print("[bold cyan]Assistant:[/bold cyan]")
-            self._live = Live(
-                Markdown(self.md),
-                vertical_overflow="visible",  # Allow scrolling during streaming
-                console=self.console,
-                refresh_per_second=30,
-                auto_refresh=False,  # We'll manually refresh to ensure immediate updates
-            )
-            self._live.start()
+        if self.interactive:
+            self.console.print("[bold cyan]Assistant:[/bold cyan]")
 
     def update(self, chunk: any):
         new_content = self._parse_chunk(chunk, self.md)
-        # Update full content for later display
-        if not self.text_only:
-            self.full_content = new_content
         
-        if self.text_only:
-            self.console.print(self._parse_chunk(chunk), end="")
-        else:
-            if new_content.startswith("Thinking...") and not new_content.strip("Thinking...").isspace():
-                new_content = new_content.strip("Thinking...").strip()
-            # Update display content while streaming
-            self.md = new_content
-            # Show all content during streaming with visible overflow
-            self._live.update(Markdown(self.md), refresh=True)
+        # Get just the new content
+        if len(new_content) > len(self.md):
+            diff = new_content[len(self.md):]
+            # Print new content directly
+            if self.text_only:
+                print(diff, end="", flush=True)
+            else:
+                self.console.print(diff, end="", soft_wrap=True)
+        
+        # Update stored content after handling output
+        self.md = new_content
 
     def update_error(self, error: Exception):
         import traceback
-        self.md += f"Error: {error}\n\nStack trace:\n```\n{traceback.format_exc()}```"
+        error_msg = f"Error: {error}\n\nStack trace:\n```\n{traceback.format_exc()}```"
+        self.md += error_msg
         if self.text_only:
-            self.console.print(self.md)
+            print(error_msg)
         else:
-            self._live.update(Markdown(self.md), refresh=True)
+            self.console.print(error_msg)
 
     def stop(self):
-        if not self.text_only and self._live:
-            self._live.stop()
+        if not self.text_only:
+            self.console.print()
 
     def confirm_tool_call(self, config: dict, chunk: any) -> bool:
         if not self._is_tool_call_requested(chunk, config):
             return True
 
-        self.stop()
+        # For tool confirmation, render the complete markdown
+        self.console.print("\n")
+        self.console.print(Markdown(self.md))
+        self.console.print("\n")
+        
+        # Get confirmation
         is_confirmed = self._ask_tool_call_confirmation()
+        
         if not is_confirmed:
-            self.md += "# Tool call denied"
+            denial_msg = "\n# Tool call denied"
+            self.md += denial_msg
+            if not self.text_only:
+                self.console.print(denial_msg)
             return False
             
-        if not self.text_only:
-            self.start()
         return True
 
     def finish(self):
@@ -91,7 +82,6 @@ class OutputHandler:
                     md += content[0]["text"]
         # If this is a final value
         elif isinstance(chunk, dict) and "messages" in chunk:
-            # Get the last message content and stream it
             last_message = chunk["messages"][-1]
             if isinstance(last_message, AIMessage):
                 content = last_message.content
@@ -103,39 +93,9 @@ class OutputHandler:
         elif isinstance(chunk, tuple) and chunk[0] == "values":
             message: BaseMessage = chunk[1]['messages'][-1]
             if isinstance(message, AIMessage) and message.tool_calls:
-                # Ensure there's a newline before Tool Calls if not already present
-                if not md.endswith('\n'):
-                    md += '\n\n'
-                md += "**Tool Calls:**"
                 for tc in message.tool_calls:
-                    lines = [
-                        f"  {tc.get('name', 'Tool')}",
-                    ]
-
-                    args = tc.get("args")
-                    if args:  # Only add code block if there are arguments
-                        lines.append("```")
-                        if isinstance(args, str):
-                            lines.append(f"{args}")
-                        elif isinstance(args, dict):
-                            for arg, value in args.items():
-                                lines.append(f"{arg}: {value}")
-                        lines.append("```")
-                    lines.append("")  # Add empty line for spacing
-                    md += "\n".join(lines)
-            elif isinstance(message, ToolMessage) and message.status != "success":
-                # Stream each part of the error message
-                if not md.endswith('\n'):
-                    md += '\n'
-                # Stream the header
-                md += "Failed call with error:\n```\n"
-                # Stream the error content character by character
-                if isinstance(message.content, str):
-                    md += message.content
-                elif isinstance(message.content, dict):
-                    md += str(message.content)
-                md += "\n```\n"
-            md += "\n"
+                    md += f"\n\n{tc.get('name', 'Tool')}: "
+                    md += str(tc.get("args", {}))
         return md
 
     def _is_tool_call_requested(self, chunk: any, config: dict) -> bool:
@@ -155,10 +115,5 @@ class OutputHandler:
         """
         Ask the user for confirmation to run a tool call.
         """
-        self.console.print("\n")
-        self.console.print(Markdown(self.md))
-        self.console.print("\n")
         is_tool_call_confirmed = Confirm.ask(f"Confirm tool call?", console=self.console)
-        if not is_tool_call_confirmed:
-            return False
-        return True
+        return is_tool_call_confirmed
