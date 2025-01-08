@@ -21,10 +21,11 @@ class OutputHandler:
             if self.interactive:
                 self.console.print("[bold cyan]Assistant:[/bold cyan]")
             self._live = Live(
-                Markdown(self.md), 
-                vertical_overflow="crop",
+                Markdown(self.md),
+                vertical_overflow="visible",
                 console=self.console,
-                refresh_per_second=60
+                refresh_per_second=120,
+                auto_refresh=False  # We'll manually refresh to ensure immediate updates
             )
             self._live.start()
 
@@ -35,7 +36,7 @@ class OutputHandler:
         else:
             if self.md.startswith("Thinking...") and not self.md.strip("Thinking...").isspace():
                 self.md = self.md.strip("Thinking...").strip()
-            self._live.update(Markdown(self.md))
+            self._live.update(Markdown(self.md), refresh=True)  # Force immediate refresh
 
     def update_error(self, error: Exception):
         import traceback
