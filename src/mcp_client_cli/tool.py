@@ -1,6 +1,8 @@
-from typing import List, Type, Optional, Any, override
+from typing import List, Type, Optional, Any, Dict, Tuple, override
 from pydantic import BaseModel, Field
 from langchain_core.tools import BaseTool, BaseToolkit, ToolException
+from langchain_core.messages import SystemMessage, HumanMessage
+from .prompt_cache import process_messages_for_caching, estimate_tokens
 from mcp import StdioServerParameters, types, ClientSession
 from mcp.client.stdio import stdio_client
 import pydantic
@@ -134,18 +136,64 @@ class McpTool(BaseTool):
     args_schema: Type[BaseModel]
     session: Optional[ClientSession]
     toolkit: McpToolkit
+    _cached_messages: Optional[List[Dict[str, Any]]] = None
+    _output_cache: Dict[str, Tuple[str, bool]] = {}  # {cache_key: (content, isError)}
 
     handle_tool_error: bool = True
 
     def _run(self, **kwargs):
         raise NotImplementedError("Only async operations are supported")
 
+    def _get_cache_key(self, **kwargs) -> str:
+        """Generate a cache key based on tool name and parameters."""
+        # Sort kwargs to ensure consistent key generation
+        sorted_kwargs = dict(sorted(kwargs.items()))
+        params_str = json.dumps(sorted_kwargs, sort_keys=True)
+        # Create a unique key combining tool name and parameters
+        key_str = f"{self.name}:{params_str}"
+        return hashlib.sha256(key_str.encode()).hexdigest()
+
+    def _prepare_tool_messages(self, **kwargs) -> List[Dict[str, Any]]:
+        """Prepare and cache tool messages including description and schema."""
+        if self._cached_messages is not None:
+            return self._cached_messages
+
+        # Create messages for tool description and schema
+        messages = [
+            SystemMessage(content=f"Tool Description: {self.description}"),
+            SystemMessage(content=f"Tool Schema: {self.args_schema.schema_json()}")
+        ]
+
+        # Add input parameters as a human message
+        input_message = f"Execute {self.name} with parameters: {json.dumps(kwargs, indent=2)}"
+        messages.append(HumanMessage(content=input_message))
+
+        # Process messages for caching
+        self._cached_messages = process_messages_for_caching(messages)
+        return self._cached_messages
+
     async def _arun(self, **kwargs):
         if not self.session:
             self.session = await self.toolkit._start_session()
 
+        # Check output cache first
+        cache_key = self._get_cache_key(**kwargs)
+        if cache_key in self._output_cache:
+            content, isError = self._output_cache[cache_key]
+            if isError:
+                raise ToolException(content)
+            return content
+
+        # Prepare cached messages
+        messages = self._prepare_tool_messages(**kwargs)
+
+        # Execute tool with cached messages
         result = await self.session.call_tool(self.name, arguments=kwargs)
         content = to_json(result.content).decode()
+        
+        # Cache the result
+        self._output_cache[cache_key] = (content, result.isError)
+        
         if result.isError:
             raise ToolException(content)
         return content
@@ -155,16 +203,18 @@ def create_langchain_tool(
     session: ClientSession,
     toolkit: McpToolkit,
 ) -> BaseTool:
-    """Create a LangChain tool from MCP tool schema.
+    """Create a LangChain tool from MCP tool schema with prompt caching.
     
     Args:
         tool_schema (types.Tool): The MCP tool schema.
         session (ClientSession): The session for the tool.
+        toolkit (McpToolkit): The parent toolkit.
     
     Returns:
-        BaseTool: The created LangChain tool.
+        BaseTool: The created LangChain tool with prompt caching enabled.
     """
-    return McpTool(
+    # Create the tool instance
+    tool = McpTool(
         name=tool_schema.name,
         description=tool_schema.description,
         args_schema=jsonschema_to_pydantic(tool_schema.inputSchema),
@@ -172,6 +222,12 @@ def create_langchain_tool(
         toolkit=toolkit,
         toolkit_name=toolkit.name,
     )
+    
+    # Pre-initialize cached messages with empty parameters
+    # This caches the static content (description and schema)
+    tool._prepare_tool_messages()
+    
+    return tool
 
 
 async def convert_mcp_to_langchain_tools(server_config: McpServerConfig, force_refresh: bool = False) -> McpToolkit:
