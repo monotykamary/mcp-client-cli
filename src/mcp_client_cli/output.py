@@ -115,12 +115,17 @@ class OutputHandler:
                     lines.append("")  # Add empty line for spacing
                     md += "\n".join(lines)
             elif isinstance(message, ToolMessage) and message.status != "success":
+                # Stream each part of the error message
                 if not md.endswith('\n'):
                     md += '\n'
-                md += "Failed call with error:\n"
-                md += "```\n"
-                md += f"{message.content}\n"
-                md += "```\n"
+                # Stream the header
+                md += "Failed call with error:\n```\n"
+                # Stream the error content character by character
+                if isinstance(message.content, str):
+                    md += message.content
+                elif isinstance(message.content, dict):
+                    md += str(message.content)
+                md += "\n```\n"
             md += "\n"
         return md
 
