@@ -4,6 +4,7 @@ from mcp import StdioServerParameters, types
 import json
 import aiosqlite
 import uuid
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
 from .const import *
 
@@ -110,3 +111,108 @@ class ConversationManager:
                 (thread_id,)
             )
             await db.commit()
+            
+    async def get_history(self, thread_id: str, db = None) -> List[BaseMessage]:
+        """Get conversation history for a thread.
+        
+        Args:
+            thread_id (str): The thread ID to get history for.
+            db: The database connection object (optional).
+            
+        Returns:
+            List[BaseMessage]: List of messages in the conversation history.
+        """
+        if db is None:
+            async with aiosqlite.connect(self.db_path) as db:
+                return await self._get_history(db, thread_id)
+        else:
+            return await self._get_history(db, thread_id)
+            
+    async def _get_history(self, db, thread_id: str) -> List[BaseMessage]:
+        """Internal method to get conversation history.
+        
+        Args:
+            db: The database connection object.
+            thread_id (str): The thread ID to get history for.
+            
+        Returns:
+            List[BaseMessage]: List of messages in the conversation history.
+        """
+        await self._init_db(db)
+        # Create messages table if it doesn't exist
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY,
+                thread_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.commit()
+        
+        # Get messages for thread
+        async with db.execute(
+            "SELECT role, content FROM messages WHERE thread_id = ? ORDER BY created_at",
+            (thread_id,)
+        ) as cursor:
+            messages = []
+            async for row in cursor:
+                role, content = row
+                if role == "human":
+                    messages.append(HumanMessage(content=content))
+                elif role == "ai":
+                    messages.append(AIMessage(content=content))
+                elif role == "system":
+                    messages.append(SystemMessage(content=content))
+            return messages
+            
+    async def save_message(self, thread_id: str, message: BaseMessage, db = None) -> None:
+        """Save a message to the conversation history.
+        
+        Args:
+            thread_id (str): The thread ID to save the message under.
+            message (BaseMessage): The message to save.
+            db: The database connection object (optional).
+        """
+        if db is None:
+            async with aiosqlite.connect(self.db_path) as db:
+                await self._save_message(db, thread_id, message)
+        else:
+            await self._save_message(db, thread_id, message)
+            
+    async def _save_message(self, db, thread_id: str, message: BaseMessage) -> None:
+        """Internal method to save a message.
+        
+        Args:
+            db: The database connection object.
+            thread_id (str): The thread ID to save the message under.
+            message (BaseMessage): The message to save.
+        """
+        # Create messages table if it doesn't exist
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY,
+                thread_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Determine message role
+        if isinstance(message, HumanMessage):
+            role = "human"
+        elif isinstance(message, AIMessage):
+            role = "ai"
+        elif isinstance(message, SystemMessage):
+            role = "system"
+        else:
+            role = "unknown"
+            
+        # Save message
+        await db.execute(
+            "INSERT INTO messages (thread_id, role, content) VALUES (?, ?, ?)",
+            (thread_id, role, str(message.content))
+        )
+        await db.commit()

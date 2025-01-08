@@ -13,8 +13,8 @@ import uuid
 import sys
 import re
 import anyio
-from langchain_core.messages import BaseMessage, HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.prebuilt import create_react_agent
 from langgraph.managed import IsLastStep
@@ -28,6 +28,7 @@ import imghdr
 import mimetypes
 
 from .input import *
+from .prompt_cache import process_messages_for_caching
 from .const import *
 from .output import *
 from .storage import *
@@ -276,25 +277,43 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
         tools = existing_tools
     
     model_kwargs = {}
-    if app_config.llm.base_url and "openrouter" in app_config.llm.base_url:
+    headers = {
+        "X-Title": "mcp-client-cli",
+        "HTTP-Referer": "https://github.com/monotykamary/mcp-client-cli",
+    }
+    
+    # Add prompt caching header for Anthropic models
+    if app_config.llm.provider == "anthropic":
+        headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+    elif app_config.llm.base_url and "openrouter" in app_config.llm.base_url:
         model_kwargs["transforms"] = ["middle-out"]
+        
     model: BaseChatModel = init_chat_model(
         model=app_config.llm.model,
         model_provider=app_config.llm.provider,
         api_key=app_config.llm.api_key,
         temperature=app_config.llm.temperature,
         base_url=app_config.llm.base_url,
-        default_headers={
-            "X-Title": "mcp-client-cli",
-            "HTTP-Referer": "https://github.com/monotykamary/mcp-client-cli",
-        },
+        default_headers=headers,
         model_kwargs=model_kwargs
     )
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", app_config.system_prompt),
-        ("placeholder", "{messages}")
-    ])
+    # Create system message with cache control if using Anthropic
+    if app_config.llm.provider == "anthropic":
+        system_msg = SystemMessage(content=[{
+            "type": "text",
+            "text": app_config.system_prompt,
+            "cache_control": {"type": "ephemeral"}
+        }])
+        prompt = ChatPromptTemplate.from_messages([
+            system_msg,
+            MessagesPlaceholder(variable_name="messages")
+        ])
+    else:
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", app_config.system_prompt),
+            ("placeholder", "{messages}")
+        ])
 
     conversation_manager = ConversationManager(SQLITE_DB)
     
@@ -310,25 +329,80 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
         thread_id = (await conversation_manager.get_last_id() if is_conversation_continuation 
                     else uuid.uuid4().hex)
 
-        input_messages = AgentState(
-            messages=[query], 
-            today_datetime=datetime.now().isoformat(),
-            memories=formatted_memories,
-        )
+        # Process messages for caching if using Anthropic
+        if app_config.llm.provider == "anthropic":
+            processed_query = HumanMessage(content=[{
+                "type": "text",
+                "text": str(query.content),
+                "cache_control": {"type": "ephemeral"}
+            }])
+            input_messages = AgentState(
+                messages=[processed_query],
+                today_datetime=datetime.now().isoformat(),
+                memories=formatted_memories,
+            )
+        else:
+            input_messages = AgentState(
+                messages=[query],
+                today_datetime=datetime.now().isoformat(),
+                memories=formatted_memories,
+            )
 
         output = OutputHandler(text_only=args.text_only, interactive=args.interactive)
         output.start()
         try:
+            # Get conversation history if continuing
+            history_messages = []
+            if is_conversation_continuation:
+                history = await conversation_manager.get_history(thread_id, checkpointer.conn)
+                if history:
+                    history_messages = history
+
+            # Process messages for caching if using Anthropic
+            if app_config.llm.provider == "anthropic":
+                all_messages = history_messages + [query]
+                processed_messages = process_messages_for_caching(all_messages)
+                # Convert processed messages back to BaseMessage objects
+                converted_messages = []
+                for msg in processed_messages:
+                    if msg["role"] == "system":
+                        converted_messages.append(SystemMessage(content=msg["content"][0]["text"]))
+                    elif msg["role"] == "assistant":
+                        converted_messages.append(AIMessage(content=msg["content"][0]["text"]))
+                    else:  # user
+                        converted_messages.append(HumanMessage(content=msg["content"][0]["text"]))
+                input_messages["messages"] = converted_messages
+            else:
+                input_messages["messages"] = history_messages + [query]
+
+            # Save the query message
+            await conversation_manager.save_message(thread_id, query, checkpointer.conn)
+            
+            # Track the last AI message for saving
+            last_ai_message = None
+            
             async for chunk in agent_executor.astream(
                 input_messages,
                 stream_mode=["messages", "values"],
-                config={"configurable": {"thread_id": thread_id, "user_id": "myself"}, 
+                config={"configurable": {"thread_id": thread_id, "user_id": "myself"},
                        "recursion_limit": 100}
             ):
                 output.update(chunk)
+                # Keep track of AI messages
+                # chunk is a tuple of (messages, values)
+                messages = chunk[0] if len(chunk) > 0 else []
+                if messages:
+                    for msg in messages:
+                        if isinstance(msg, AIMessage):
+                            last_ai_message = msg
+                
                 if not args.no_confirmations:
                     if not output.confirm_tool_call(app_config.__dict__, chunk):
                         break
+            
+            # Save the AI's response
+            if last_ai_message:
+                await conversation_manager.save_message(thread_id, last_ai_message, checkpointer.conn)
         except Exception as e:
             output.update_error(e)
         finally:
