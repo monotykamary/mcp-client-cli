@@ -14,16 +14,16 @@ authors = [
 ]
 license = { text = "MIT" }
 dependencies = [
-    "langchain-anthropic>=0.3.0",
-    "langchain>=0.3.8",
-    "mcp>=1.0.0",
+    "langchain-anthropic>=0.3.1",
+    "langchain>=0.3.14",
+    "mcp>=1.2.0",
     "python-dotenv>=1.0.1",
-    "langgraph>=0.2.53",
-    "langchain-openai>=0.2.10",
-    "langchain-google-genai>=2.0.7",
+    "langgraph>=0.2.61",
+    "langchain-openai>=0.2.14",
+    "langchain-google-genai>=2.0.8",
     "aiosqlite>=0.20.0",
     "langgraph-checkpoint-sqlite>=2.0.1",
-    "rich>=13.9.0",
+    "rich>=13.9.4",
     "commentjson>=0.9.0",
     "jsonschema-pydantic>=0.6",
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
