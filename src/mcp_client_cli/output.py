@@ -1,4 +1,4 @@
-from langchain_core.messages import BaseMessage, AIMessage, AIMessageChunk, ToolMessage
+from langchain_core.messages import BaseMessage, AIMessage, AIMessageChunk
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.prompt import Confirm
@@ -16,7 +16,7 @@ class OutputHandler:
 
     def update(self, chunk: any):
         new_content = self._parse_chunk(chunk, self.md)
-        
+
         # Get just the new content
         if len(new_content) > len(self.md):
             diff = new_content[len(self.md):]
@@ -25,7 +25,7 @@ class OutputHandler:
                 print(diff, end="", flush=True)
             else:
                 self.console.print(diff, end="", soft_wrap=True)
-        
+
         # Update stored content after handling output
         self.md = new_content
 
@@ -50,17 +50,17 @@ class OutputHandler:
         self.console.print("\n")
         self.console.print(Markdown(self.md))
         self.console.print("\n")
-        
+
         # Get confirmation
         is_confirmed = self._ask_tool_call_confirmation()
-        
+
         if not is_confirmed:
             denial_msg = "\n# Tool call denied"
             self.md += denial_msg
             if not self.text_only:
                 self.console.print(denial_msg)
             return False
-            
+
         return True
 
     def finish(self):
