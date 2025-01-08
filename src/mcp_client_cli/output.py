@@ -24,9 +24,9 @@ class OutputHandler:
             self.console_height = self.console.height or 24  # Default to 24 if height not available
             self._live = Live(
                 Markdown(self.md),
-                vertical_overflow="crop",
+                vertical_overflow="visible",
                 console=self.console,
-                refresh_per_second=120,
+                refresh_per_second=30,
                 auto_refresh=False  # We'll manually refresh to ensure immediate updates
             )
             self._live.start()
