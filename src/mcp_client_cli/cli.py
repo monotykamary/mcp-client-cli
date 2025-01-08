@@ -28,6 +28,7 @@ import imghdr
 import mimetypes
 
 from .input import *
+from .terminal_input import get_user_input
 from .prompt_cache import process_messages_for_caching
 from .const import *
 from .output import *
@@ -106,7 +107,7 @@ async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfi
                 
                 # Get user input with proper formatting
                 console.print("[bold green]User:[/bold green] ", end="")
-                user_input = input().strip()
+                user_input = await get_user_input()
                 
                 if user_input.lower() == '/exit':
                     console.print("\n[bold cyan]Exiting chat...[/bold cyan]")

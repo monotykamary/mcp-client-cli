@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp_client_cli"
-version = "0.4.3"
+version = "0.4.4"
 description = "Command line interface for MCP client"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -14,6 +14,7 @@ authors = [
 ]
 license = { text = "MIT" }
 dependencies = [
+    "prompt-toolkit>=3.0.48",
     "langchain-anthropic>=0.3.1",
     "langchain>=0.3.14",
     "mcp>=1.2.0",
