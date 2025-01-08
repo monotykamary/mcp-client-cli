@@ -13,7 +13,7 @@ import uuid
 import sys
 import re
 import anyio
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.prebuilt import create_react_agent
@@ -53,19 +53,19 @@ async def run() -> None:
     """Run the LLM agent."""
     args = setup_argument_parser()
     app_config = AppConfig.load()
-    
+
     if args.list_tools:
         await handle_list_tools(app_config, args)
         return
-    
+
     if args.show_memories:
         await handle_show_memories()
         return
-    
+
     if args.clear_memories:
         await handle_clear_memories()
         return
-        
+
     if args.list_prompts:
         handle_list_prompts()
         return
@@ -73,17 +73,17 @@ async def run() -> None:
     if args.interactive:
         await handle_interactive_chat(args, app_config)
         return
-        
+
     query, is_conversation_continuation = parse_query(args)
     await handle_conversation(args, query, is_conversation_continuation, app_config)
 
 async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfig) -> None:
     """Handle interactive chat mode."""
     console = Console()
-    
+
     conversation_manager = ConversationManager(SQLITE_DB)
     thread_id = uuid.uuid4().hex
-    
+
     # Initialize tools once for the entire session
     server_configs = [
         McpServerConfig(
@@ -98,31 +98,31 @@ async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfi
         for name, config in app_config.get_enabled_servers().items()
     ]
     toolkits, tools = await load_tools(server_configs, args.no_tools, args.force_refresh)
-    
+
     try:
         while True:
             try:
                 # Add separator line after first message
                 console.print("[green]" + "─" * console.width + "[/green]")
-                
+
                 # Get user input with proper formatting
                 console.print("[bold green]User:[/bold green]")  # Print on its own line
                 console.print("", end="")  # Print space for input on next line
                 user_input = await get_user_input()
-                
+
                 if user_input.lower() == '/exit':
                     console.print("\n[bold cyan]Exiting chat...[/bold cyan]")
                     break
-                    
+
                 # Create message
                 query = HumanMessage(content=user_input)
 
                 # Create a new line after user input
                 console.print()
-                
+
                 # Handle the conversation with existing tools, using the interactive session's thread_id
                 await handle_conversation(args, query, False, app_config, toolkits=toolkits, existing_tools=tools, thread_id=thread_id)
-                
+
             except KeyboardInterrupt:
                 console.print("\n[bold cyan]Exiting chat...[/bold cyan]")
                 break
@@ -190,7 +190,7 @@ async def handle_list_tools(app_config: AppConfig, args: argparse.Namespace) -> 
         for name, config in app_config.get_enabled_servers().items()
     ]
     toolkits, tools = await load_tools(server_configs, args.no_tools, args.force_refresh)
-    
+
     console = Console()
     table = Table(title="Available LLM Tools")
     table.add_column("Toolkit", style="cyan")
@@ -232,20 +232,20 @@ def handle_list_prompts() -> None:
     table.add_column("Name", style="cyan")
     table.add_column("Template")
     table.add_column("Arguments")
-    
+
     for name, template in prompt_templates.items():
         table.add_row(name, template, ", ".join(re.findall(r'\{(\w+)\}', template)))
-        
+
     console.print(table)
 
 async def load_tools(server_configs: list[McpServerConfig], no_tools: bool, force_refresh: bool) -> tuple[list, list]:
     """Load and convert MCP tools to LangChain tools."""
     if no_tools:
         return [], []
-        
+
     toolkits = []
     langchain_tools = []
-    
+
     async def convert_toolkit(server_config: McpServerConfig):
         toolkit = await convert_mcp_to_langchain_tools(server_config, force_refresh)
         toolkits.append(toolkit)
@@ -254,11 +254,11 @@ async def load_tools(server_configs: list[McpServerConfig], no_tools: bool, forc
     async with anyio.create_task_group() as tg:
         for server_param in server_configs:
             tg.start_soon(convert_toolkit, server_param)
-            
+
     langchain_tools.append(save_memory)
     return toolkits, langchain_tools
 
-async def handle_conversation(args: argparse.Namespace, query: HumanMessage, 
+async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
                             is_conversation_continuation: bool, app_config: AppConfig,
                             toolkits: list = None, existing_tools: list = None,
                             thread_id: str = None) -> None:
@@ -280,19 +280,19 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
         toolkits, tools = await load_tools(server_configs, args.no_tools, args.force_refresh)
     else:
         tools = existing_tools
-    
+
     model_kwargs = {}
     headers = {
         "X-Title": "mcp-client-cli",
         "HTTP-Referer": "https://github.com/monotykamary/mcp-client-cli",
     }
-    
+
     # Add prompt caching header for Anthropic models
     if app_config.llm.provider == "anthropic":
         headers["anthropic-beta"] = "prompt-caching-2024-07-31"
     elif app_config.llm.base_url and "openrouter" in app_config.llm.base_url:
         model_kwargs["transforms"] = ["middle-out"]
-        
+
     model: BaseChatModel = init_chat_model(
         model=app_config.llm.model,
         model_provider=app_config.llm.provider,
@@ -321,19 +321,19 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
         ])
 
     conversation_manager = ConversationManager(SQLITE_DB)
-    
+
     async with AsyncSqliteSaver.from_conn_string(SQLITE_DB) as checkpointer:
         store = SqliteStore(SQLITE_DB)
         memories = await get_memories(store)
         formatted_memories = "\n".join(f"- {memory}" for memory in memories)
         agent_executor = create_react_agent(
-            model, tools, state_schema=AgentState, 
+            model, tools, state_schema=AgentState,
             state_modifier=prompt, checkpointer=checkpointer, store=store
         )
-        
+
         # Use provided thread_id for interactive mode, otherwise handle continuation logic
         if thread_id is None:
-            thread_id = (await conversation_manager.get_last_id() if is_conversation_continuation 
+            thread_id = (await conversation_manager.get_last_id() if is_conversation_continuation
                         else uuid.uuid4().hex)
 
         # Process messages for caching if using Anthropic
@@ -384,10 +384,10 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
 
             # Save the query message
             await conversation_manager.save_message(thread_id, query, checkpointer.conn)
-            
+
             # Track the last AI message for saving
             last_ai_message = None
-            
+
             async for chunk in agent_executor.astream(
                 input_messages,
                 stream_mode=["messages", "values"],
@@ -402,11 +402,11 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
                     for msg in messages:
                         if isinstance(msg, AIMessage):
                             last_ai_message = msg
-                
+
                 if not args.no_confirmations:
                     if not output.confirm_tool_call(app_config.__dict__, chunk):
                         break
-            
+
             # Save the AI's response
             if last_ai_message:
                 await conversation_manager.save_message(thread_id, last_ai_message, checkpointer.conn)
