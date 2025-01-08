@@ -108,7 +108,7 @@ async def handle_interactive_chat(args: argparse.Namespace, app_config: AppConfi
                 console.print("[bold green]User:[/bold green] ", end="")
                 user_input = input().strip()
                 
-                if user_input.lower() == 'exit':
+                if user_input.lower() == '/exit':
                     console.print("\n[bold cyan]Exiting chat...[/bold cyan]")
                     break
                     
