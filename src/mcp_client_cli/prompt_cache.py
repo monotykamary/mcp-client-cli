@@ -19,80 +19,53 @@ def estimate_tokens(text: str) -> int:
     return len(str(text)) // 4
 
 def process_messages_for_caching(
-    messages: List[BaseMessage], 
-    max_cache_blocks: int = 4
+    messages: List[BaseMessage],
 ) -> List[Dict[str, Any]]:
-    """Process messages to add caching for system prompt and largest messages.
+    """Process messages to add caching for system prompt and last 3 user messages.
     
     Args:
         messages: List of messages to process
-        max_cache_blocks: Maximum number of cache blocks to use (default: 4)
         
     Returns:
         List of processed messages with cache control added
     """
     processed_messages = []
-    cache_count = 0
     
-    # Get message sizes for all non-system messages
-    message_sizes: List[Tuple[int, int, BaseMessage]] = []
-    for i, msg in enumerate(messages):
-        if not isinstance(msg, SystemMessage):
-            token_count = estimate_tokens(str(msg.content))
-            message_sizes.append((token_count, i, msg))
+    # Find indices of last three user messages
+    lastThreeUserMsgIndices = [
+        i for i, msg in enumerate(messages) if isinstance(msg, HumanMessage)
+    ][-3:]
     
-    # Sort by size descending
-    message_sizes.sort(reverse=True)
-    
-    # Get indices of largest messages to cache
-    to_cache = set()
-    remaining_cache_blocks = max_cache_blocks
-    
-    # Process messages
     for i, msg in enumerate(messages):
         if isinstance(msg, SystemMessage):
-            # Always try to cache system message if it's large enough
-            token_count = estimate_tokens(str(msg.content))
-            if token_count > 1024 and remaining_cache_blocks > 0:
-                content = [{
-                    "type": "text",
-                    "text": str(msg.content),
-                    "cache_control": {"type": "ephemeral"}
-                }]
-                remaining_cache_blocks -= 1
-            else:
-                content = [{"type": "text", "text": str(msg.content)}]
-                
-            processed_messages.append({
-                "role": "system",
-                "content": content
-            })
-            continue
-            
-        # For non-system messages, cache the largest ones
-        if remaining_cache_blocks > 0:
-            for _, idx, _ in message_sizes:
-                if idx == i:
-                    to_cache.add(i)
-                    remaining_cache_blocks -= 1
-                    break
-                if remaining_cache_blocks == 0:
-                    break
-        
-        # Process message content
-        if i in to_cache:
+            # Always cache system message
             content = [{
                 "type": "text",
                 "text": str(msg.content),
                 "cache_control": {"type": "ephemeral"}
             }]
+            processed_messages.append({
+                "role": "system",
+                "content": content
+            })
+        elif isinstance(msg, HumanMessage) and i in lastThreeUserMsgIndices:
+            # Cache last three user messages
+            content = [{
+                "type": "text",
+                "text": str(msg.content),
+                "cache_control": {"type": "ephemeral"}
+            }]
+            processed_messages.append({
+                "role": "user",
+                "content": content
+            })
         else:
+            # Do not cache other messages
             content = [{"type": "text", "text": str(msg.content)}]
+            role = "assistant" if isinstance(msg, AIMessage) else "user"
+            processed_messages.append({
+                "role": role,
+                "content": content
+            })
             
-        role = "assistant" if isinstance(msg, AIMessage) else "user"
-        processed_messages.append({
-            "role": role,
-            "content": content
-        })
-        
     return processed_messages
