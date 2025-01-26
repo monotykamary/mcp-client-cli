@@ -48,6 +48,7 @@ class AgentState(TypedDict):
     today_datetime: str
     # The user's memories.
     memories: str = "no memories"
+    remaining_steps: int = 5
 
 async def run() -> None:
     """Run the LLM agent."""
@@ -167,6 +168,8 @@ Examples:
                        help='Print output as raw text instead of parsing markdown')
     parser.add_argument('--no-tools', action='store_true',
                        help='Do not add any tools')
+    parser.add_argument('--no-intermediates', action='store_true',
+                       help='Only print the final message')
     parser.add_argument('--show-memories', action='store_true',
                        help='Show user memories')
     parser.add_argument('--clear-memories', action='store_true',
